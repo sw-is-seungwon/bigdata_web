@@ -94,12 +94,22 @@ def load_works():
     return []
 
 
+@st.dialog("🔍 학생 웹앱 미리보기", width="large")
+def preview_dialog(name, html_code):
+    st.markdown(f"### {name} 학생 작품")
+    components.html(
+        html_code,
+        height=650,
+        scrolling=True
+    )
+
+
 st.markdown('<div class="main-title">🌊 [빅데이터 프로그래밍] 나만의 데이터 분석 웹앱 만들기 🌊</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">학생들이 만든 HTML 웹앱을 올리고, 친구들의 작품을 바로 감상해요.</div>', unsafe_allow_html=True)
 
 with st.expander("➕ 작품 업로드하기", expanded=True):
     with st.form("upload_form", clear_on_submit=True):
-        class_name = st.selectbox("분반", ["301","303"])
+        class_name = st.selectbox("분반", ["301", "303"])
         student_id = st.text_input("학번")
         name = st.text_input("이름")
         uploaded_file = st.file_uploader("HTML 파일 업로드", type=["html", "txt"])
@@ -159,24 +169,15 @@ else:
             </div>
             """, unsafe_allow_html=True)
 
+            html_code = decode_html(work["html_base64"])
+
             if st.button("👀 미리보기", key=f"preview_{i}"):
-                st.session_state["preview_name"] = work["name"]
-                st.session_state["preview_html"] = decode_html(work["html_base64"])
+                preview_dialog(work["name"], html_code)
 
             st.download_button(
                 label="⬇ HTML 다운로드",
-                data=decode_html(work["html_base64"]),
+                data=html_code,
                 file_name=work["filename"],
                 mime="text/html",
                 key=f"download_{i}"
             )
-
-if "preview_html" in st.session_state:
-    st.divider()
-    st.subheader(f"🔍 {st.session_state['preview_name']} 학생 작품 미리보기")
-
-    components.html(
-        st.session_state["preview_html"],
-        height=650,
-        scrolling=True
-    )
