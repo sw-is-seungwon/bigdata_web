@@ -1,11 +1,7 @@
 import base64
-from datetime import datetime
-
+import requests
 import streamlit as st
 import streamlit.components.v1 as components
-import gspread
-from google.oauth2.service_account import Credentials
-
 
 st.set_page_config(
     page_title="우리 반 웹앱 전시장",
@@ -13,52 +9,38 @@ st.set_page_config(
     layout="wide"
 )
 
-SCOPE = [
-    "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/drive"
-]
+APPS_SCRIPT_URL = st.secrets["APPS_SCRIPT_URL"]
 
 
-@st.cache_resource
-def connect_sheet():
-    creds = Credentials.from_service_account_info(
-        st.secrets["gcp_service_account"],
-        scopes=SCOPE
-    )
-    client = gspread.authorize(creds)
-    sheet = client.open_by_key(st.secrets["SHEET_ID"]).sheet1
-    return sheet
+def call_apps_script(payload):
+    response = requests.post(APPS_SCRIPT_URL, json=payload)
+    response.raise_for_status()
+    return response.json()
 
 
-def encode_html(html_text):
-    return base64.b64encode(html_text.encode("utf-8")).decode("utf-8")
+def encode_file(uploaded_file):
+    file_bytes = uploaded_file.read()
+    return base64.b64encode(file_bytes).decode("utf-8")
 
 
-def decode_html(encoded_text):
-    return base64.b64decode(encoded_text.encode("utf-8")).decode("utf-8")
+def decode_html(html_base64):
+    return base64.b64decode(html_base64).decode("utf-8", errors="ignore")
 
 
-def get_all_submissions(sheet):
-    records = sheet.get_all_records()
-    return records
+def load_works():
+    result = call_apps_script({
+        "action": "list"
+    })
 
+    if result.get("success"):
+        return result.get("works", [])
 
-def save_submission(sheet, student_id, name, filename, html_text):
-    encoded = encode_html(html_text)
-
-    sheet.append_row([
-        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        student_id,
-        name,
-        filename,
-        encoded
-    ])
+    st.error(result.get("message", "목록을 불러오지 못했습니다."))
+    return []
 
 
 st.title("🧑‍💻 우리 반 웹앱 전시장")
-st.caption("학생들이 만든 HTML 웹앱을 업로드하고, 친구들의 작품을 바로 미리볼 수 있습니다.")
-
-sheet = connect_sheet()
+st.caption("학생들이 만든 HTML 웹앱을 업로드하고 친구들의 작품을 바로 미리볼 수 있습니다.")
 
 with st.expander("➕ 작품 업로드하기", expanded=True):
     with st.form("upload_form", clear_on_submit=True):
@@ -70,53 +52,54 @@ with st.expander("➕ 작품 업로드하기", expanded=True):
 
         if submitted:
             if not student_id or not name or uploaded_file is None:
-                st.warning("학번, 이름, HTML 파일을 모두 입력해주세요.")
+                st.warning("학번, 이름, 파일을 모두 입력해주세요.")
             else:
-                html_text = uploaded_file.read().decode("utf-8", errors="ignore")
+                html_base64 = encode_file(uploaded_file)
 
-                if "<html" not in html_text.lower() and "<!doctype html" not in html_text.lower():
-                    st.warning("HTML 파일인지 확인해주세요.")
-                else:
-                    save_submission(
-                        sheet=sheet,
-                        student_id=student_id,
-                        name=name,
-                        filename=uploaded_file.name,
-                        html_text=html_text
-                    )
+                payload = {
+                    "action": "upload",
+                    "student_id": student_id,
+                    "name": name,
+                    "filename": f"{student_id}_{name}_{uploaded_file.name}",
+                    "html_base64": html_base64
+                }
+
+                result = call_apps_script(payload)
+
+                if result.get("success"):
                     st.success("업로드가 완료되었습니다.")
                     st.rerun()
+                else:
+                    st.error(result.get("message", "업로드 실패"))
 
 st.divider()
 
 st.subheader("📌 제출된 웹앱")
 
-records = get_all_submissions(sheet)
-records = list(reversed(records))
+works = load_works()
+works = list(reversed(works))
 
-if len(records) == 0:
+if not works:
     st.info("아직 제출된 작품이 없습니다.")
 else:
     cols = st.columns(3)
 
-    for i, row in enumerate(records):
+    for i, work in enumerate(works):
         with cols[i % 3]:
             with st.container(border=True):
-                st.markdown(f"### {row['name']}")
-                st.write(f"학번: {row['student_id']}")
-                st.caption(f"파일명: {row['filename']}")
-                st.caption(f"제출 시간: {row['timestamp']}")
+                st.markdown(f"### {work['name']}")
+                st.write(f"학번: {work['student_id']}")
+                st.caption(f"파일명: {work['filename']}")
+                st.caption(f"제출 시간: {work['timestamp']}")
 
                 if st.button("미리보기", key=f"preview_{i}"):
-                    st.session_state["preview_name"] = row["name"]
-                    st.session_state["preview_html"] = decode_html(row["html_base64"])
-
-                html_for_download = decode_html(row["html_base64"])
+                    st.session_state["preview_name"] = work["name"]
+                    st.session_state["preview_html"] = decode_html(work["html_base64"])
 
                 st.download_button(
                     label="HTML 다운로드",
-                    data=html_for_download,
-                    file_name=row["filename"],
+                    data=decode_html(work["html_base64"]),
+                    file_name=work["filename"],
                     mime="text/html",
                     key=f"download_{i}"
                 )
