@@ -4,7 +4,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 st.set_page_config(
-    page_title="[빅데이터 프로그래밍] 데이터 분석 웹앱 만들기",
+    page_title="빅데이터 분석 웹앱 만들기",
     page_icon="🌊",
     layout="wide"
 )
@@ -94,7 +94,7 @@ def load_works():
     return []
 
 
-st.markdown('<div class="main-title">🌊 우리 반 여름 웹앱 전시장</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">🌊 [빅데이터 프로그래밍] 나만의 데이터 분석 웹앱 만들기 🌊</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">학생들이 만든 HTML 웹앱을 올리고, 친구들의 작품을 바로 감상해요.</div>', unsafe_allow_html=True)
 
 with st.expander("➕ 작품 업로드하기", expanded=True):
